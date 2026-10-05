@@ -1,18 +1,23 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement; // Necessário para recarregar a cena
 
 public class ScoreUI : MonoBehaviour
 {
+    [Header("Placar")]
     [SerializeField] private TextMeshProUGUI scoreTextA;
     [SerializeField] private TextMeshProUGUI scoreTextB;
-    [SerializeField] private TextMeshProUGUI winnerText; // <--- Novo campo para a mensagem de vitória
+
+    [Header("Painel de Vitória")]
+    [SerializeField] private GameObject victoryPanel; // Referência ao Painel (Fundo + Botão)
+    [SerializeField] private TextMeshProUGUI winnerText; // Texto de quem ganhou
 
     private void Start()
     {
-        // Esconde o texto de vitória no início do jogo
-        if (winnerText != null)
+        // Garante que o painel comece desligado (invisível) quando o jogo inicia
+        if (victoryPanel != null)
         {
-            winnerText.gameObject.SetActive(false);
+            victoryPanel.SetActive(false);
         }
     }
 
@@ -24,10 +29,17 @@ public class ScoreUI : MonoBehaviour
 
     public void ShowWinner(string message)
     {
-        if (winnerText != null)
+        if (victoryPanel != null && winnerText != null)
         {
-            winnerText.text = message;
-            winnerText.gameObject.SetActive(true); // Exibe o texto quando o jogo termina
+            winnerText.text = message; // Muda o texto para "TIME A VENCEU"
+            victoryPanel.SetActive(true); // Liga o painel na tela
         }
+    }
+
+    // Função que será chamada quando o jogador clicar no botão de "Jogar Novamente"
+    public void RestartGame()
+    {
+        Time.timeScale = 1f; // Volta o tempo ao normal antes de recarregar
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name); // Recarrega a cena atual
     }
 }

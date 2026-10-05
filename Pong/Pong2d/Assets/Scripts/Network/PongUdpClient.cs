@@ -1,10 +1,10 @@
-using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Controls;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Globalization;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 public class PongUdpClient : MonoBehaviour
 {
@@ -165,11 +165,11 @@ public class PongUdpClient : MonoBehaviour
             targetPlayer4
         );
 
-        // Atualiza visualmente a bola.
-        UpdatePaddlePosition(
-            ball,
-            targetBall
-        );
+        // Atualiza a bola diretamente com a posição recebida.
+        if (ball != null)
+        {
+            ball.position = targetBall;
+        }
     }
 
     private void SendHello()
@@ -413,3 +413,5 @@ public class PongUdpClient : MonoBehaviour
         }
     }
 }
+
+

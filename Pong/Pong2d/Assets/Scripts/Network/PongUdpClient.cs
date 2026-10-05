@@ -5,6 +5,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 public class PongUdpClient : MonoBehaviour
 {
@@ -165,11 +166,12 @@ public class PongUdpClient : MonoBehaviour
             targetPlayer4
         );
 
-        // Atualiza a bola diretamente com a posição recebida.
-        if (ball != null)
-        {
-            ball.position = targetBall;
-        }
+        // Atualiza a posição visual da bola
+        // usando o estado recebido do servidor.
+        UpdatePaddlePosition(
+            ball,
+            targetBall
+        );
     }
 
     private void SendHello()
@@ -413,5 +415,3 @@ public class PongUdpClient : MonoBehaviour
         }
     }
 }
-
-

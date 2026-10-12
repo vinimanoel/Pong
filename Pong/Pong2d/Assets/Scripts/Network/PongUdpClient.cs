@@ -1,11 +1,10 @@
-using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
-using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Globalization;
 
 public class PongUdpClient : MonoBehaviour
 {
@@ -166,8 +165,7 @@ public class PongUdpClient : MonoBehaviour
             targetPlayer4
         );
 
-        // Atualiza a posição visual da bola
-        // usando o estado recebido do servidor.
+        // Atualiza visualmente a bola.
         UpdatePaddlePosition(
             ball,
             targetBall

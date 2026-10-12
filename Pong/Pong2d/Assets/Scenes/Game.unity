@@ -1730,6 +1730,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   teamAScore: 0
   teamBScore: 0
+  maxScore: 15
   scoreUI: {fileID: 1643541677}
 --- !u!4 &1388605902
 Transform:
@@ -2516,3 +2517,5 @@ SceneRoots:
   - {fileID: 1284714620}
   - {fileID: 1087976967}
   - {fileID: 1727589859}
+
+

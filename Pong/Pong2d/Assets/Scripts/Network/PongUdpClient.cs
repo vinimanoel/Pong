@@ -1,10 +1,11 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
+using System;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Globalization;
 
 public class PongUdpClient : MonoBehaviour
 {
@@ -26,10 +27,10 @@ public class PongUdpClient : MonoBehaviour
     [Header("Score")]
     [SerializeField] private ScoreUI scoreUI;
 
-    private int myId = -1;
-
-    private float helloTimer = 0f;
-    private float inputTimer = 0f;
+    private int assignedSlot = -1;
+    private int requestedSlot;
+    private float joinTimer;
+    private float inputTimer;
 
     private Vector3 targetPlayer1;
     private Vector3 targetPlayer2;
@@ -37,93 +38,66 @@ public class PongUdpClient : MonoBehaviour
     private Vector3 targetPlayer4;
     private Vector3 targetBall;
 
+    public int AssignedSlot => assignedSlot;
+
     private void Start()
     {
-        client = new UdpClient();
+        scoreUI = scoreUI != null
+            ? scoreUI
+            : FindFirstObjectByType<ScoreUI>();
 
-        serverEP = new IPEndPoint(
-            IPAddress.Parse(serverIp),
-            serverPort
-        );
-
-        client.Connect(serverEP);
-
-        if (player1 != null)
+        if (scoreUI != null)
         {
-            targetPlayer1 = player1.position;
+            scoreUI.BindNetworkClient(this);
         }
 
-        if (player2 != null)
+        try
         {
-            targetPlayer2 = player2.position;
-        }
+            client = new UdpClient();
+            serverEP = new IPEndPoint(
+                IPAddress.Parse(serverIp),
+                serverPort
+            );
+            client.Connect(serverEP);
 
-        if (player3 != null)
+            targetPlayer1 = PositionOf(player1);
+            targetPlayer2 = PositionOf(player2);
+            targetPlayer3 = PositionOf(player3);
+            targetPlayer4 = PositionOf(player4);
+            targetBall = PositionOf(ball);
+        }
+        catch (Exception exception)
         {
-            targetPlayer3 = player3.position;
+            Debug.LogError("Não foi possível conectar ao servidor Pong: " + exception.Message);
+            enabled = false;
         }
-
-        if (player4 != null)
-        {
-            targetPlayer4 = player4.position;
-        }
-
-        if (ball != null)
-        {
-            targetBall = ball.position;
-        }
-
-        Debug.Log("Cliente Pong conectado ao servidor");
-
-        SendHello();
     }
 
     private void Update()
     {
-        // Envia HELLO novamente até receber o ID.
-        if (myId == -1)
+        if (client == null)
         {
-            helloTimer += Time.deltaTime;
+            return;
+        }
 
-            if (helloTimer >= 1f)
+        if (requestedSlot > 0 && requestedSlot != assignedSlot)
+        {
+            joinTimer += Time.unscaledDeltaTime;
+            if (joinTimer >= 1f)
             {
-                helloTimer = 0f;
-                SendHello();
+                joinTimer = 0f;
+                SendJoinRequest();
             }
         }
 
-        // Recebe mensagens do servidor.
         while (client.Available > 0)
         {
             try
             {
-                IPEndPoint remoteEP = new IPEndPoint(
-                    IPAddress.Any,
-                    0
-                );
-
-                byte[] data = client.Receive(
-                    ref remoteEP
-                );
-
-                string msg =
-                    Encoding.UTF8.GetString(data);
-
-                if (msg.StartsWith("ASSIGN:"))
-                {
-                    myId = int.Parse(
-                        msg.Substring(7)
-                    );
-
-                    Debug.Log(
-                        "Recebi meu ID: " +
-                        myId
-                    );
-                }
-                else if (msg.StartsWith("STATE:"))
-                {
-                    ProcessState(msg);
-                }
+                IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
+                byte[] data = client.Receive(ref remote);
+                string message = Encoding.UTF8.GetString(data);
+                ProcessMessage(message);
             }
             catch (SocketException)
             {
@@ -131,122 +105,193 @@ public class PongUdpClient : MonoBehaviour
             }
         }
 
-        // Só envia comandos depois de receber o ID.
-        if (myId != -1)
+        if (assignedSlot > 0)
         {
-            inputTimer += Time.deltaTime;
-
-            if (inputTimer >= 0.1f)
+            inputTimer += Time.unscaledDeltaTime;
+            if (inputTimer >= 0.05f)
             {
                 inputTimer = 0f;
-
-                SendInputs();
+                SendNetworkMessage("INPUT:" + GetLocalInput());
             }
         }
 
-        // Atualiza visualmente os paddles.
-        UpdatePaddlePosition(
-            player1,
-            targetPlayer1
-        );
-
-        UpdatePaddlePosition(
-            player2,
-            targetPlayer2
-        );
-
-        UpdatePaddlePosition(
-            player3,
-            targetPlayer3
-        );
-
-        UpdatePaddlePosition(
-            player4,
-            targetPlayer4
-        );
-
-        // Atualiza visualmente a bola.
-        UpdatePaddlePosition(
-            ball,
-            targetBall
-        );
+        UpdatePosition(player1, targetPlayer1);
+        UpdatePosition(player2, targetPlayer2);
+        UpdatePosition(player3, targetPlayer3);
+        UpdatePosition(player4, targetPlayer4);
+        UpdatePosition(ball, targetBall);
     }
 
-    private void SendHello()
+    public bool ConfigureServer(string ipAddress)
     {
-        string msg = "HELLO PONG";
-
-        byte[] data =
-            Encoding.UTF8.GetBytes(msg);
-
-        client.Send(
-            data,
-            data.Length
-        );
-
-        Debug.Log(
-            "HELLO enviado ao servidor"
-        );
-    }
-
-    private void SendInputs()
-    {
-        string player1Input;
-        string player2Input;
-
-        // Cliente 1 controla P1 e P2.
-        if (myId == 1)
+        if (!IPAddress.TryParse(ipAddress, out IPAddress address) ||
+            address.AddressFamily != AddressFamily.InterNetwork)
         {
-            player1Input =
-                GetVerticalInput(
-                    Keyboard.current.wKey,
-                    Keyboard.current.sKey
-                );
-
-            player2Input =
-                GetVerticalInput(
-                    Keyboard.current.eKey,
-                    Keyboard.current.dKey
-                );
-
-            string msg =
-                "INPUT:P1;" +
-                player1Input +
-                ";P2;" +
-                player2Input;
-
-            SendNetworkMessage(msg);
+            return false;
         }
 
-        // Cliente 2 controla P3 e P4.
-        else if (myId == 2)
+        if (client != null && serverEP != null && serverEP.Address.Equals(address))
         {
-            player1Input =
-                GetVerticalInput(
-                    Keyboard.current.iKey,
-                    Keyboard.current.kKey
-                );
+            return true;
+        }
 
-            player2Input =
-                GetVerticalInput(
-                    Keyboard.current.oKey,
-                    Keyboard.current.lKey
-                );
+        UdpClient newClient = null;
+        try
+        {
+            newClient = new UdpClient();
+            IPEndPoint newEndpoint = new IPEndPoint(address, serverPort);
+            newClient.Connect(newEndpoint);
 
-            string msg =
-                "INPUT:P3;" +
-                player1Input +
-                ";P4;" +
-                player2Input;
+            UdpClient previousClient = client;
+            client = newClient;
+            serverEP = newEndpoint;
+            serverIp = address.ToString();
+            assignedSlot = -1;
+            requestedSlot = 0;
 
-            SendNetworkMessage(msg);
+            if (previousClient != null)
+            {
+                previousClient.Close();
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            if (newClient != null)
+            {
+                newClient.Close();
+            }
+
+            Debug.LogError("Não foi possível configurar o servidor Pong: " + exception.Message);
+            return false;
         }
     }
 
-    private string GetVerticalInput(
-        KeyControl upKey,
-        KeyControl downKey
-    )
+    public void RequestPlayer(int slot)
+    {
+        if (slot < 1 || slot > 4)
+        {
+            return;
+        }
+
+        requestedSlot = slot;
+        joinTimer = 0f;
+        SendJoinRequest();
+    }
+    public void RequestStart()
+    {
+        SendNetworkMessage("START");
+    }
+
+    public void RequestReplay()
+    {
+        SendNetworkMessage("RESTART");
+    }
+
+    private void SendJoinRequest()
+    {
+        if (requestedSlot >= 1 && requestedSlot <= 4)
+        {
+            SendNetworkMessage("JOIN:" + requestedSlot);
+        }
+    }
+    private void ProcessMessage(string message)
+    {
+        if (message.StartsWith("ASSIGN:", StringComparison.Ordinal))
+        {
+            if (int.TryParse(message.Substring(7), out int slot))
+            {
+                assignedSlot = slot;
+                if (scoreUI != null)
+                {
+                    scoreUI.OnPlayerAssigned(slot);
+                }
+            }
+        }
+        else if (message.StartsWith("PLAYER_TAKEN:", StringComparison.Ordinal) ||
+                 message.StartsWith("TEAM_FULL:", StringComparison.Ordinal))
+        {
+            int prefixLength = message.StartsWith("PLAYER_TAKEN:", StringComparison.Ordinal) ? 13 : 10;
+            int attemptedSlot = requestedSlot;
+            int.TryParse(message.Substring(prefixLength), out assignedSlot);
+            requestedSlot = assignedSlot;
+
+            if (scoreUI != null)
+            {
+                if (assignedSlot > 0)
+                {
+                    scoreUI.OnPlayerAssigned(assignedSlot);
+                }
+
+                scoreUI.OnPlayerRequestFailed(
+                    "P" + attemptedSlot + " já está ocupado. Escolha outro jogador."
+                );
+            }
+        }
+        else if (message == "START" || message == "RESTART")
+        {
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.BeginNetworkGame();
+            }
+        }
+        else if (message.StartsWith("END:", StringComparison.Ordinal))
+        {
+            ProcessGameOver(message);
+        }
+        else if (message.StartsWith("STATE:", StringComparison.Ordinal))
+        {
+            ProcessState(message);
+        }
+    }
+
+    private void ProcessGameOver(string message)
+    {
+        string[] parts = message.Split(':');
+        if (parts.Length != 4 ||
+            !int.TryParse(parts[2], out int scoreA) ||
+            !int.TryParse(parts[3], out int scoreB))
+        {
+            return;
+        }
+
+        string winner = parts[1] == "A" ? "TIME A" : "TIME B";
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.EndGameFromNetwork(winner, scoreA, scoreB);
+        }
+    }
+
+    private Vector3 PositionOf(Transform target)
+    {
+        return target != null ? target.position : Vector3.zero;
+    }
+
+    private string GetLocalInput()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            return "NONE";
+        }
+
+        switch (assignedSlot)
+        {
+            case 1:
+                return ReadVertical(keyboard.wKey, keyboard.sKey);
+            case 2:
+                return ReadVertical(keyboard.upArrowKey, keyboard.downArrowKey);
+            case 3:
+                return ReadVertical(keyboard.iKey, keyboard.kKey);
+            case 4:
+                return ReadVertical(keyboard.oKey, keyboard.lKey);
+            default:
+                return "NONE";
+        }
+    }
+
+    private string ReadVertical(KeyControl upKey, KeyControl downKey)
     {
         if (upKey.isPressed)
         {
@@ -261,155 +306,89 @@ public class PongUdpClient : MonoBehaviour
         return "NONE";
     }
 
-    private void ProcessState(string msg)
+    private void ProcessState(string message)
     {
-        string data =
-            msg.Substring(6);
-
-        string[] parts =
-            data.Split(';');
-
-        // 8 posições dos paddles
-        // + 2 posições da bola
-        // + 2 pontos
+        string[] parts = message.Substring(6).Split(';');
         if (parts.Length != 12)
         {
             return;
         }
 
-        float p1X = float.Parse(
-            parts[0],
-            CultureInfo.InvariantCulture
-        );
-
-        float p1Y = float.Parse(
-            parts[1],
-            CultureInfo.InvariantCulture
-        );
-
-        float p2X = float.Parse(
-            parts[2],
-            CultureInfo.InvariantCulture
-        );
-
-        float p2Y = float.Parse(
-            parts[3],
-            CultureInfo.InvariantCulture
-        );
-
-        float p3X = float.Parse(
-            parts[4],
-            CultureInfo.InvariantCulture
-        );
-
-        float p3Y = float.Parse(
-            parts[5],
-            CultureInfo.InvariantCulture
-        );
-
-        float p4X = float.Parse(
-            parts[6],
-            CultureInfo.InvariantCulture
-        );
-
-        float p4Y = float.Parse(
-            parts[7],
-            CultureInfo.InvariantCulture
-        );
-
-        float ballX = float.Parse(
-            parts[8],
-            CultureInfo.InvariantCulture
-        );
-
-        float ballY = float.Parse(
-            parts[9],
-            CultureInfo.InvariantCulture
-        );
-
-        int scoreA = int.Parse(parts[10]);
-        int scoreB = int.Parse(parts[11]);
-
-        targetPlayer1 =
-            new Vector3(
-                p1X,
-                p1Y,
-                0f
-            );
-
-        targetPlayer2 =
-            new Vector3(
-                p2X,
-                p2Y,
-                0f
-            );
-
-        targetPlayer3 =
-            new Vector3(
-                p3X,
-                p3Y,
-                0f
-            );
-
-        targetPlayer4 =
-            new Vector3(
-                p4X,
-                p4Y,
-                0f
-            );
-
-        targetBall =
-            new Vector3(
-                ballX,
-                ballY,
-                0f
-            );
-
-        if (scoreUI != null)
+        float[] values = new float[10];
+        for (int i = 0; i < values.Length; i++)
         {
-            scoreUI.UpdateScore(
-                scoreA,
-                scoreB
-            );
+            if (!float.TryParse(
+                    parts[i],
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out values[i]))
+            {
+                return;
+            }
+        }
+
+        if (!int.TryParse(parts[10], out int scoreA) ||
+            !int.TryParse(parts[11], out int scoreB))
+        {
+            return;
+        }
+
+        targetPlayer1 = new Vector3(values[0], values[1], 0f);
+        targetPlayer2 = new Vector3(values[2], values[3], 0f);
+        targetPlayer3 = new Vector3(values[4], values[5], 0f);
+        targetPlayer4 = new Vector3(values[6], values[7], 0f);
+        targetBall = new Vector3(values[8], values[9], 0f);
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.ApplyNetworkScore(scoreA, scoreB);
         }
     }
 
-    private void UpdatePaddlePosition(
-        Transform target,
-        Vector3 targetPosition
-    )
+    private void UpdatePosition(Transform target, Vector3 targetPosition)
     {
         if (target == null)
         {
             return;
         }
 
-        target.position =
-            Vector3.Lerp(
-                target.position,
-                targetPosition,
-                Time.deltaTime * 15f
-            );
-    }
-
-    private void SendNetworkMessage(
-        string msg
-    )
-    {
-        byte[] data =
-            Encoding.UTF8.GetBytes(msg);
-
-        client.Send(
-            data,
-            data.Length
+        target.position = Vector3.Lerp(
+            target.position,
+            targetPosition,
+            Time.unscaledDeltaTime * 15f
         );
     }
 
-    private void OnApplicationQuit()
+    private void SendNetworkMessage(string message)
+    {
+        if (client == null)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            client.Send(data, data.Length);
+        }
+        catch (SocketException)
+        {
+            // A solicitação será enviada novamente no próximo ciclo.
+        }
+        catch (ObjectDisposedException)
+        {
+            // O aplicativo está encerrando.
+        }
+    }
+
+    private void OnDestroy()
     {
         if (client != null)
         {
             client.Close();
+            client = null;
         }
     }
 }
+
+

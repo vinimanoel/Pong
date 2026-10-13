@@ -12,7 +12,7 @@ public class PongUdpClient : MonoBehaviour
     private UdpClient client;
     private IPEndPoint serverEP;
 
-    [SerializeField] private string serverIp = "127.0.0.1";
+    [SerializeField] private string serverIp = "10.57.1.1";
     [SerializeField] private int serverPort = 5001;
 
     [Header("Paddles")]

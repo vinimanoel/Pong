@@ -584,6 +584,12 @@ public class ScoreUI : MonoBehaviour
 
         input.text = savedServerIp;
         serverIpInput = input;
+
+        if (launcher != null && launcher.IsClientMode)
+        {
+            input.Select();
+            input.ActivateInputField();
+        }
     }
 
     private string GetLocalIPv4Address()

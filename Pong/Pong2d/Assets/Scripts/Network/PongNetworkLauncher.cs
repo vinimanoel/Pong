@@ -10,39 +10,63 @@ public class PongNetworkLauncher : MonoBehaviour
         LocalTest
     }
 
-    [SerializeField] private NetworkMode mode =
-        NetworkMode.LocalTest;
+    private NetworkMode mode = NetworkMode.Host;
 
     [SerializeField] private PongUdpServer server;
     [SerializeField] private PongUdpClient client;
 
+    private bool roleSelected;
+
+    public bool IsClientMode => roleSelected && mode == NetworkMode.Client;
+
     private void Awake()
     {
+        StopNetworking();
+    }
+
+    public void StartAsHost()
+    {
+        StartNetworkMode(NetworkMode.Host);
+    }
+
+    public void StartAsClient()
+    {
+        StartNetworkMode(NetworkMode.Client);
+    }
+
+    public void StopNetworking()
+    {
+        roleSelected = false;
+
+        if (client != null)
+        {
+            client.enabled = false;
+        }
+
+        if (server != null)
+        {
+            server.enabled = false;
+        }
+    }
+
+    private void StartNetworkMode(NetworkMode selectedMode)
+    {
+        StopNetworking();
+        mode = selectedMode;
+        roleSelected = true;
+
         ConfigurePaddles();
         ConfigureBallPhysics();
         ConfigureGoals();
 
-        switch (mode)
+        if (server != null)
         {
-            case NetworkMode.Host:
-                server.enabled = true;
-                client.enabled = true;
-                break;
+            server.enabled = mode == NetworkMode.Host;
+        }
 
-            case NetworkMode.Server:
-                server.enabled = true;
-                client.enabled = false;
-                break;
-
-            case NetworkMode.Client:
-                server.enabled = false;
-                client.enabled = true;
-                break;
-
-            case NetworkMode.LocalTest:
-                server.enabled = true;
-                client.enabled = true;
-                break;
+        if (client != null)
+        {
+            client.enabled = true;
         }
     }
 
@@ -96,12 +120,9 @@ public class PongNetworkLauncher : MonoBehaviour
                 FindObjectsSortMode.None
             );
 
-        if (mode == NetworkMode.Client)
+        foreach (GoalController goal in goals)
         {
-            foreach (GoalController goal in goals)
-            {
-                goal.enabled = false;
-            }
+            goal.enabled = mode != NetworkMode.Client;
         }
     }
 }

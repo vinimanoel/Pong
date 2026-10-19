@@ -52,8 +52,15 @@ public class PongUdpServer : MonoBehaviour
         Instance = this;
     }
 
-    private void Start()
+    private void OnEnable()
     {
+        Instance = this;
+
+        if (server != null)
+        {
+            return;
+        }
+
         try
         {
             server = new UdpClient(5001);
@@ -324,21 +331,44 @@ public class PongUdpServer : MonoBehaviour
         }
     }
 
+    private void OnDisable()
+    {
+        Shutdown();
+    }
+
     private void OnDestroy()
     {
+        Shutdown();
+    }
+
+    private void Shutdown()
+    {
         running = false;
+        player1Input = 0;
+        player2Input = 0;
+        player3Input = 0;
+        player4Input = 0;
 
-        if (server != null)
+        lock (clientsLock)
         {
-            server.Close();
+            clientIds.Clear();
+            clientEndpoints.Clear();
         }
 
-        if (receiveThread != null && receiveThread.IsAlive)
-        {
-            receiveThread.Join(500);
-        }
-
+        UdpClient socket = server;
         server = null;
+        if (socket != null)
+        {
+            socket.Close();
+        }
+
+        Thread thread = receiveThread;
+        receiveThread = null;
+        if (thread != null && thread.IsAlive)
+        {
+            thread.Join(500);
+        }
+
         if (Instance == this)
         {
             Instance = null;

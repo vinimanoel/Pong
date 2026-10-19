@@ -110,21 +110,55 @@ public class ScoreUI : MonoBehaviour
 
     public void ShowMainMenu()
     {
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+        if (launcher != null)
+        {
+            launcher.StopNetworking();
+        }
+
         Time.timeScale = 0f;
         selectingTeam = false;
         SetOverlayVisible(true);
         ClearCard();
-        SetCardSize(560f, 430f);
+        SetCardSize(620f, 500f);
 
         overlayTitle.text = "PONG 2D";
-        SetRect(overlayTitle.rectTransform, 0f, 75f, 520f, 60f);
-        overlayMessage.fontSize = 20f;
-        SetRect(overlayMessage.rectTransform, 0f, 10f, 520f, 82f);
+        SetRect(overlayTitle.rectTransform, 0f, 145f, 520f, 60f);
+        overlayMessage.fontSize = 18f;
+        SetRect(overlayMessage.rectTransform, 0f, 65f, 560f, 85f);
         overlayMessage.text =
-            "TIME A fica à esquerda  •  TIME B fica à direita\n" +
-            "A primeira equipe a fazer 15 gols vence.";
+            "Escolha como esta máquina vai participar.\n" +
+            "O Host cria a partida; os demais entram como clientes.";
 
-        AddButton("INICIAR JOGO", -55f, ShowTeamSelection);
+        AddButton("CRIAR PARTIDA • HOST", -35f, ChooseHostMode);
+        AddButton("ENTRAR EM PARTIDA • CLIENTE", -115f, ChooseClientMode);
+    }
+
+    private void ChooseHostMode()
+    {
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+        if (launcher == null)
+        {
+            return;
+        }
+
+        launcher.StartAsHost();
+        ShowTeamSelection();
+    }
+
+    private void ChooseClientMode()
+    {
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+        if (launcher == null)
+        {
+            return;
+        }
+
+        launcher.StartAsClient();
+        ShowTeamSelection();
     }
 
     public void ShowTeamSelection()
@@ -138,9 +172,15 @@ public class ScoreUI : MonoBehaviour
         SetRect(overlayTitle.rectTransform, 0f, 310f, 520f, 60f);
         overlayMessage.fontSize = 16f;
         SetRect(overlayMessage.rectTransform, 0f, 230f, 600f, 80f);
-        overlayMessage.text =
-            "IP desta máquina: " + GetLocalIPv4Address() + "\n" +
-            "Host mantém 127.0.0.1; clientes digitam o IP do host abaixo.";
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+        bool isClientMode = launcher != null && launcher.IsClientMode;
+
+        overlayMessage.text = isClientMode
+            ? "IP atual deste computador (cliente): " + GetLocalIPv4Address() + "\n" +
+              "No campo abaixo, informe o IP atual do host."
+            : "IP atual deste computador (host): " + GetLocalIPv4Address() + "\n" +
+              "Esse endereço varia conforme o computador e a rede.";
 
         CreateServerIpInput();
 
@@ -229,9 +269,12 @@ public class ScoreUI : MonoBehaviour
             return;
         }
 
-        string serverAddress = serverIpInput != null
-            ? serverIpInput.text.Trim()
-            : "127.0.0.1";
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+        bool isClientMode = launcher != null && launcher.IsClientMode;
+        string serverAddress = isClientMode
+            ? (serverIpInput != null ? serverIpInput.text.Trim() : "")
+            : IPAddress.Loopback.ToString();
         if (!networkClient.ConfigureServer(serverAddress))
         {
             OnPlayerRequestFailed("Digite um IPv4 válido para o host (ex.: 192.168.0.10).");
@@ -518,7 +561,28 @@ public class ScoreUI : MonoBehaviour
         input.lineType = TMP_InputField.LineType.SingleLine;
         input.characterLimit = 15;
         input.contentType = TMP_InputField.ContentType.Standard;
-        input.text = PlayerPrefs.GetString("PongServerIp", "127.0.0.1");
+        string savedServerIp = PlayerPrefs.GetString("PongServerIp", "");
+        PongNetworkLauncher launcher =
+            FindFirstObjectByType<PongNetworkLauncher>();
+
+        if (launcher != null && launcher.IsClientMode)
+        {
+            inputObject.SetActive(true);
+            // O cliente não alcança o host usando o endereço de loopback da própria máquina.
+            if (string.IsNullOrWhiteSpace(savedServerIp) ||
+                (IPAddress.TryParse(savedServerIp, out IPAddress savedAddress) &&
+                 IPAddress.IsLoopback(savedAddress)))
+            {
+                savedServerIp = "";
+            }
+        }
+        else
+        {
+            inputObject.SetActive(false);
+            savedServerIp = "127.0.0.1";
+        }
+
+        input.text = savedServerIp;
         serverIpInput = input;
     }
 

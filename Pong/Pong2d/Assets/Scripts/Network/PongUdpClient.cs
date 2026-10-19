@@ -40,8 +40,13 @@ public class PongUdpClient : MonoBehaviour
 
     public int AssignedSlot => assignedSlot;
 
-    private void Start()
+    private void OnEnable()
     {
+        assignedSlot = -1;
+        requestedSlot = 0;
+        joinTimer = 0f;
+        inputTimer = 0f;
+
         scoreUI = scoreUI != null
             ? scoreUI
             : FindFirstObjectByType<ScoreUI>();
@@ -381,13 +386,27 @@ public class PongUdpClient : MonoBehaviour
         }
     }
 
-    private void OnDestroy()
+    private void OnDisable()
     {
         if (client != null)
         {
             client.Close();
             client = null;
         }
+
+        serverEP = null;
+        assignedSlot = -1;
+        requestedSlot = 0;
+
+        if (scoreUI != null)
+        {
+            scoreUI.BindNetworkClient(null);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        OnDisable();
     }
 }
 

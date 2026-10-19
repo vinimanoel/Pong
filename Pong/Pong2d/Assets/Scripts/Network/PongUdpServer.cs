@@ -170,9 +170,11 @@ public class PongUdpServer : MonoBehaviour
     private void AssignPlayer(string key, IPEndPoint endpoint, string selection)
     {
         int desiredSlot;
+        bool isNewClient;
         lock (clientsLock)
         {
             clientIds.TryGetValue(key, out int currentSlot);
+            isNewClient = currentSlot == 0;
 
             if (selection == "A" || selection == "B")
             {
@@ -187,6 +189,10 @@ public class PongUdpServer : MonoBehaviour
             if (desiredSlot <= 0 ||
                 (desiredSlot != currentSlot && clientEndpoints.ContainsKey(desiredSlot)))
             {
+                if (isNewClient)
+                {
+                    Debug.LogWarning($"Pedido de {endpoint.Address}:{endpoint.Port} recebido, mas o jogador solicitado ({selection}) não está disponível.");
+                }
                 SendMessage("PLAYER_TAKEN:" + currentSlot, endpoint);
                 return;
             }
@@ -201,6 +207,10 @@ public class PongUdpServer : MonoBehaviour
             clientEndpoints[desiredSlot] =
                 new IPEndPoint(endpoint.Address, endpoint.Port);
 
+            if (isNewClient)
+            {
+                Debug.Log($"Cliente conectado: {endpoint.Address}:{endpoint.Port} como P{desiredSlot}");
+            }
             SendMessage("ASSIGN:" + desiredSlot, endpoint);
         }
     }

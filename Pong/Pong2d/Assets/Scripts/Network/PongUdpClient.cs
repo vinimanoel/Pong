@@ -182,6 +182,7 @@ public class PongUdpClient : MonoBehaviour
 
         requestedSlot = slot;
         joinTimer = 0f;
+        Debug.Log($"Solicitando P{slot} para o host {serverEP?.Address}:{serverEP?.Port}");
         SendJoinRequest();
     }
     public void RequestStart()
@@ -208,6 +209,7 @@ public class PongUdpClient : MonoBehaviour
             if (int.TryParse(message.Substring(7), out int slot))
             {
                 assignedSlot = slot;
+                Debug.Log($"Host confirmou a conexão: cliente atribuído ao P{slot}");
                 if (scoreUI != null)
                 {
                     scoreUI.OnPlayerAssigned(slot);
